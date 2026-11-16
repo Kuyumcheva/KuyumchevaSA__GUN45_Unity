@@ -2,47 +2,68 @@
 
 namespace DefaultNamespace
 {
-	
-	[RequireComponent(typeof(PositionSaver))]
-	public class EditorMover : MonoBehaviour
-	{
-		private PositionSaver _save;
-		private float _currentDelay;
-		
-		//todo comment: Что произойдёт, если _delay > _duration?
-		//
-		private float _delay = 0.5f;
-		private float _duration = 5f;
 
-		private void Start()
-		{
-			//todo comment: Почему этот поиск производится здесь, а не в начале метода Update?
-			_save = GetComponent<PositionSaver>();
-			_save.Records.Clear();
-		}
+    [RequireComponent(typeof(PositionSaver))]
+    public class EditorMover : MonoBehaviour
+    {
+        private PositionSaver _save;
+        private float _currentDelay;
 
-		private void Update()
-		{
-			_duration -= Time.deltaTime;
-			if (_duration <= 0f)
-			{
-				enabled = false;
-				Debug.Log($"<b>{name}</b> finished", this);
-				return;
-			}
-			
-			//todo comment: Почему не написать (_delay -= Time.deltaTime;) по аналогии с полем _duration?
-			_currentDelay -= Time.deltaTime;
-			if (_currentDelay <= 0f)
-			{
-				_currentDelay = _delay;
-				_save.Records.Add(new PositionSaver.Data
-				{
-					Position = transform.position,
-					//todo comment: Для чего сохраняется значение игрового времени?
-					Time = Time.time,
-				});
-			}
-		}
-	}
+        //todo comment: Что произойдёт, если _delay > _duration?
+        // Ответ: Если _delay > _duration, счётчик _duration успеет дойти до нуля раньше, чем наступит момент сохранения первой точки.
+        // Records не попадёт ничего и в итоге ReplayMoverвоспроизводить нечего.
+        [Range(0.2f, 1.0f)]
+        [SerializeField] private float _delay = 0.5f;
+
+        [Min(0.2f)]
+        [SerializeField] private float _duration = 5f;
+
+        private void Start()
+        {
+            //todo comment: Почему этот поиск производится здесь, а не в начале метода Update?
+            // Ответ: Это нужно для оптимизации. Если делать GetComponent в Update, поиск будет выполняться каждый кадр. 
+            //В Start достаточно найти компонент один раз: его ссылка не меняется. 
+            //Плюс тут же сразу очищаем старые записи, чтобы новая сессия шла с чистого листа.
+
+            _save = GetComponent<PositionSaver>();
+
+            if (_duration <= _delay)
+            {
+                _duration = _delay * 5f;
+                Debug.Log($"<b>{name}</b>: _duration was too short, set to {_duration}s", this);
+            }
+
+            _save.Records.Clear();
+        }
+
+        private void Update()
+        {
+            _duration -= Time.deltaTime;
+            if (_duration <= 0f)
+            {
+                enabled = false;
+                Debug.Log($"<b>{name}</b> finished", this);
+                return;
+            }
+
+            //todo comment: Почему не написать (_delay -= Time.deltaTime;) по аналогии с полем _duration?
+            // Ответ: _duration — счётчик общего времени, он должен убывать до нуля.
+            // А _delay — настройка, интервал между снимками. Она нужна постоянно: при каждом сбросе таймера (_currentDelay = _delay) её значение используется заново.
+            // Если вычитать из _delay, интервал станет всё короче, а поле уйдёт в минус и таймер сработает каждый кадр.
+            _currentDelay -= Time.deltaTime;
+            if (_currentDelay <= 0f)
+            {
+                _currentDelay = _delay;
+                _save.Records.Add(new PositionSaver.Data
+                {
+                    Position = transform.position,
+                    //todo comment: Для чего сохраняется значение игрового времени?
+                    // Ответ: Это момент времени, когда мы сохранили координаты.
+                    // ReplayMover сравнивает метки соседних записей, чтобы узнать длительность каждого отрезка и воспроизвести движение в том же темпе, как при записи
+                    // Без Time.time все отрезки считались бы одинаковыми и ритм движения исказился бы.
+                    Time = Time.time,
+                });
+            }
+        }
+    }
 }
