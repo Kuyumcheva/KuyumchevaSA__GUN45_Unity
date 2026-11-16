@@ -10,6 +10,7 @@ namespace DefaultNamespace
 		private float _currentDelay;
 		
 		//todo comment: Что произойдёт, если _delay > _duration?
+		//
 		private float _delay = 0.5f;
 		private float _duration = 5f;
 
